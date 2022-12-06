@@ -19,7 +19,7 @@ module LLC ;
 	logic 	[Byte_offset - 1 :0] Byte;		// Byte select
 	logic 	[Index_bits - 1	:0] Index;		// Index
 	logic 	[Address_bits - 1 :0] Address,a1;	// Address
-	logic   [1:0] Address_PartSelect = Address[1:0];
+	//logic   [1:0] Address_PartSelect = Address[1:0];
 	logic   [PLRU_bits-1:0]PLRU[Sets-1:0];   // PLRU Matrix
 	
 	bit [Way_bits-1:0] evict_Way;
@@ -109,9 +109,9 @@ int Message_Copy;
 	/* Simulate the reporting of snoop results by other caches */ 
 	function int GetSnoopResult(logic  [Address_bits-1:0] Address);
 	/* returns HIT, NOHIT, or HITM */ 
-	if(Address_PartSelect==2'b00)
+	if(Address[1:0]==2'b00)
 		 SnoopResult_Copy= HIT;
-	else if((Address_PartSelect==2'b10)||(Address_PartSelect=2'b11))
+	else if((Address[1:0]==2'b10)||(Address[1:0]==2'b11))
 		SnoopResult_Copy= NOHIT;
 	else
 		SnoopResult_Copy= HITM;
@@ -141,10 +141,8 @@ caches of other processors
 	/* Used to simulate communication to our upper level cache */ 
 	function void MessageToCache(int Message_Copy, logic [Address_bits-1:0] Address); 
 	if (x==1) 
-	  $display("L2: %d %d'h%h\n",  Message_Copy, Address_bits,Address); 
+	  $display("L2 messages L1: %d %d'h%h\n",  Message_Copy, Address_bits,Address); 
 	endfunction :MessageToCache
-
-		
 		
 		//Reading Trace File
 		
@@ -209,10 +207,11 @@ caches of other processors
 			if (NotValid) //if empty cache line is found (Cold miss)
 			begin
 			    //$display("Cold miss");
-				SnoopResult_Copy=NOHIT;
+				//SnoopResult_Copy=NOHIT;
 				SnoopResult=GetSnoopResult(Address);
-				if(SnoopResult==0) //if snoop Hit
+				if(SnoopResult==2'b00) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag,Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -221,6 +220,7 @@ caches of other processors
 				end
 				else if((SnoopResult==2 )||(SnoopResult==3)) //if snoop miss
 				begin
+				//$display("NOHIT");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -229,6 +229,7 @@ caches of other processors
 				end	
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -238,42 +239,48 @@ caches of other processors
 			end
 			else //Conflict miss    
 			begin
+				//$display("Conflict miss");
 				SnoopResult_Copy=NOHIT;
 				SnoopResult=GetSnoopResult(Address);
 				if(SnoopResult==0) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag, evict_Way);
+				Allocate_CacheLine_e(Index,Tag, evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Shared;
 				MessageToCache(SENDLINE,Address);
+				
 				//$display("%b" ,PLRU[Index]);
 				end
 				else if((SnoopResult==2)||(SnoopResult==3)) //if snoop miss
 				begin
-				//$display("Conflict miss");
+				//$display("NOHIT");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				//UpdatePLRUBits_LLC(Index, evict_Way);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag, evict_Way);
+				Allocate_CacheLine_e(Index,Tag, evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Exclusive;
-				$display("%b",LLC_Cache[Index][evict_Way].MESI_bits);
+				//$display("%b",LLC_Cache[Index][evict_Way].MESI_bits);
 				MessageToCache(SENDLINE,Address);
-				$display("%b" ,PLRU[Index]);
+				//$display("%b" ,PLRU[Index]);
 				end	
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag, evict_Way);
+				Allocate_CacheLine_e(Index,Tag, evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Shared;
 				MessageToCache(SENDLINE,Address);
+				//$display("%b",LLC_Cache[Index][evict_Way].MESI_bits);
+				//$display("%b" ,PLRU[Index]);
 				end
 			end
 		end	
@@ -310,6 +317,7 @@ caches of other processors
 				SnoopResult=GetSnoopResult(Address);
 				if(SnoopResult==0) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(RWIM,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -318,6 +326,7 @@ caches of other processors
 				end
 				else if((SnoopResult==2)||(SnoopResult==3)) //if snoop miss
 				begin
+				//$display("NOHIT");
 				BusOperation(RWIM,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -326,6 +335,7 @@ caches of other processors
 				end	
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(RWIM,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -340,30 +350,33 @@ caches of other processors
 				SnoopResult=GetSnoopResult(Address);
 				if(SnoopResult==0) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(RWIM,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag,evict_Way);
+				Allocate_CacheLine_e(Index,Tag,evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way );
 				LLC_Cache[Index][evict_Way].MESI_bits = Modified;
 				MessageToCache(SENDLINE,Address);
 				end
 				else if((SnoopResult==2)||(SnoopResult==3)) //if snoop miss...get from DRAM
 				begin
+				//$display("NOHIT");
 				BusOperation(RWIM,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag,evict_Way);
+				Allocate_CacheLine_e(Index,Tag,evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way );
 				LLC_Cache[Index][evict_Way].MESI_bits = Modified;
 				MessageToCache(SENDLINE,Address);
 				end
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(RWIM,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag,evict_Way);
+				Allocate_CacheLine_e(Index,Tag,evict_Way);
 				UpdatePLRUBits_LLC(Index,evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Modified;
 				MessageToCache(SENDLINE,Address);
@@ -398,6 +411,7 @@ caches of other processors
 				SnoopResult=GetSnoopResult(Address);
 				if(SnoopResult==0) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag,Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -407,6 +421,7 @@ caches of other processors
 				
 				else if((SnoopResult==2)||(SnoopResult==3)) //if snoop miss
 				begin
+				//$display("NOHIT");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -416,6 +431,7 @@ caches of other processors
 					
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(READ,Address,SnoopResult);
 				Allocate_CacheLine(Index,Tag, Ways);
 				UpdatePLRUBits_LLC(Index, Ways );
@@ -429,30 +445,33 @@ caches of other processors
 				SnoopResult=GetSnoopResult(Address);
 				if(SnoopResult==0) //if snoop Hit
 				begin
+				//$display("HIT");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag, evict_Way);
+				Allocate_CacheLine_e(Index,Tag, evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Shared;
 				MessageToCache(SENDLINE,Address);
 				end
 				else if((SnoopResult==2)||(SnoopResult==3)) //if snoop miss
 				begin
+				//$display("NOHIT");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag, evict_Way);
+				Allocate_CacheLine_e(Index,Tag, evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Exclusive;
 				MessageToCache(SENDLINE,Address);
 				end	
 				else //if snoop HiTM
 				begin
+				//$display("HITM");
 				BusOperation(READ,Address,SnoopResult);
 				GETPLRU_for_Eviction(Index);
 				Evict_CacheLine(Index,evict_Way);  /*Invalidate the cache line */
-				Allocate_CacheLine(Index,Tag,evict_Way);
+				Allocate_CacheLine_e(Index,Tag,evict_Way);
 				UpdatePLRUBits_LLC(Index, evict_Way);
 				LLC_Cache[Index][evict_Way].MESI_bits = Exclusive;
 				MessageToCache(SENDLINE,Address);
@@ -635,11 +654,17 @@ caches of other processors
 
 	// Cache line Allocation
 
-	task automatic Allocate_CacheLine (logic [Index_bits -1:0] iIndex, logic [Tag_bits -1 :0] iTag, ref bit [Way_bits-1:0] evict_Way); // Allocacte Cache Line in LLC
-		//$display("%b",evict_Way);
+	task automatic Allocate_CacheLine_e (logic [Index_bits -1:0] iIndex, logic [Tag_bits -1 :0] iTag, ref bit [Way_bits-1:0] evict_Way); // Allocacte Cache Line in LLC
+		$display("evicted way is: %d",evict_Way);
 		LLC_Cache[iIndex][evict_Way].Tag_bits = iTag;
-		//$display("%h,%b",LLC_Cache[iIndex][evict_Way].Tag_bits,evict_Way);
+		$display("Evicted way previous tag bits:%d'h%h",Tag_bits,Tag_e);
 		//UpdatePLRUBits_LLC(iIndex, Ways);		
+	endtask :Allocate_CacheLine_e
+	
+	task automatic Allocate_CacheLine (logic [Index_bits -1:0] iIndex, logic [Tag_bits -1 :0] iTag, ref bit [Way_bits-1:0] Ways); // Allocacte Cache Line in LLC
+		
+		LLC_Cache[iIndex][Ways].Tag_bits = iTag;
+	
 	endtask :Allocate_CacheLine
 
 	// Psuedo LRU Implementation
@@ -764,6 +789,7 @@ caches of other processors
 
 	task automatic Evict_CacheLine(logic [Index_bits-1:0] iIndex, ref bit[2:0] evict_Way);
 		//LLC_Cache[iIndex][evict_Way].MESI_bits = Invalid;
+		
 		Tag_e=LLC_Cache[iIndex][evict_Way].Tag_bits;
 		a1={Tag_e,iIndex,6'b000000};
 		//can message to L1 cache to invalidate line
